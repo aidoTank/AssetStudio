@@ -42,6 +42,8 @@ namespace AssetStudio
             decompileProcess.StartInfo.Arguments = DecompileArg;
             decompileProcess.StartInfo.StandardOutputEncoding = Encoding.UTF8;
             decompileProcess.StartInfo.UseShellExecute = false;
+            decompileProcess.StartInfo.CreateNoWindow = true;
+            decompileProcess.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
             try
             {
                 decompileProcess.Start();
