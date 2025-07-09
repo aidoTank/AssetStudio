@@ -279,11 +279,13 @@ namespace AssetStudio
             {
                 case CompressionType.None:
                     {
+                        Console.WriteLine("CompressionType in ReadBlocksInfoAndDirectory: " + "None");
                         blocksInfoUncompresseddStream = new MemoryStream(blocksInfoBytes);
                         break;
                     }
                 case CompressionType.Lzma:
                     {
+                        Console.WriteLine("CompressionType in ReadBlocksInfoAndDirectory: " + "LZMA");
                         blocksInfoUncompresseddStream = new MemoryStream((int)(uncompressedSize));
                         using (var blocksInfoCompressedStream = new MemoryStream(blocksInfoBytes))
                         {
@@ -295,6 +297,7 @@ namespace AssetStudio
                 case CompressionType.Lz4:
                 case CompressionType.Lz4HC:
                     {
+                        Console.WriteLine("CompressionType in ReadBlocksInfoAndDirectory: " + (compressionType == CompressionType.Lz4 ? "LZ4" : "LZ4HC"));
                         var uncompressedBytes = new byte[uncompressedSize];
                         var numWrite = LZ4Codec.Decode(blocksInfoBytes, uncompressedBytes);
                         if (numWrite != uncompressedSize)
@@ -350,11 +353,13 @@ namespace AssetStudio
                 {
                     case CompressionType.None:
                         {
+                            Console.WriteLine("CompressionType in ReadBlocks: " + "None");
                             reader.BaseStream.CopyTo(blocksStream, blockInfo.compressedSize);
                             break;
                         }
                     case CompressionType.Lzma:
                         {
+                            Console.WriteLine("CompressionType in ReadBlocks: " + "LZMA");
                             SevenZipHelper.StreamDecompress(reader.BaseStream, blocksStream, blockInfo.compressedSize, blockInfo.uncompressedSize);
                             break;
                         }
