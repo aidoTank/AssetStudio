@@ -6,10 +6,10 @@ namespace AssetStudio
 {
     public class LuaJitDecompileHandler : ILuaDecompileHandler
     {
-        private const string LJD_PATH = "ljd/main.py";
-        private const string PTYHON_PATH = "python/python.exe";
+        private const string LUAJIT_DECOMPILER_PATH = "ljdv2/luajit_decompiler_v2.exe";
         private const string DEPENDENCY_PATH = "Dependencies";
-        private const string TEMP_FILE = "tempCompiledLua.lua";
+        private const string TEMP_FILE = "tempCompiledLua";
+        private const string TEMP_OUTPUT_FILE = "tempCompiledLua.lua";
 
         public byte[] Decompile(LuaByteInfo luaByteInfo)
         {
@@ -25,45 +25,82 @@ namespace AssetStudio
         private bool TryDecompile(byte[] luaBytes, out byte[] luaCode)
         {
             var dependencyPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, DEPENDENCY_PATH));
-            var decompilerPath = Path.GetFullPath(Path.Combine(dependencyPath, LJD_PATH));
-            var pythonExePath = Path.GetFullPath(Path.Combine(dependencyPath, PTYHON_PATH));
+            var decompilerPath = Path.GetFullPath(Path.Combine(dependencyPath, LUAJIT_DECOMPILER_PATH));
+            
+            // 检查反编译器是否存在
+            if (!File.Exists(decompilerPath))
+            {
+                Console.WriteLine($"LuaJIT反编译器未找到: {decompilerPath}");
+                luaCode = null;
+                return false;
+            }
 
+            // 写入临时输入文件
             File.WriteAllBytes(TEMP_FILE, luaBytes);
 
-            var decompileProcess = BuildProcess(pythonExePath, string.Format("{0} {1}", decompilerPath, TEMP_FILE));
+            // 构建命令参数：使用静默模式和强制覆盖
+            var args = $"\"{TEMP_FILE}\" -s -f -o \".\"";
+            var decompileProcess = BuildProcess(decompilerPath, args);
 
-            bool success = true;
+            bool success = false;
             luaCode = null;
             try
             {
                 decompileProcess.Start();
                 decompileProcess.WaitForExit();
+                
                 if (decompileProcess.ExitCode == 0)
                 {
-                    luaCode = Encoding.UTF8.GetBytes(decompileProcess.Output);
+                    // 检查输出文件是否存在
+                    if (File.Exists(TEMP_OUTPUT_FILE))
+                    {
+                        luaCode = File.ReadAllBytes(TEMP_OUTPUT_FILE);
+                        success = true;
+                    }
+                    else
+                    {
+                        Console.WriteLine("反编译完成但未找到输出文件");
+                    }
                 }
                 else
                 {
-                    Console.WriteLine(decompileProcess.Error);
+                    Console.WriteLine($"反编译失败，退出码: {decompileProcess.ExitCode}");
+                    if (!string.IsNullOrEmpty(decompileProcess.Error))
+                    {
+                        Console.WriteLine($"错误信息: {decompileProcess.Error}");
+                    }
                 }
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.Message);
+                Console.WriteLine($"反编译过程出现异常: {e.Message}");
                 success = false;
             }
             finally
             {
                 decompileProcess.Close();
+                
+                // 清理临时文件
+                try
+                {
+                    if (File.Exists(TEMP_FILE))
+                        File.Delete(TEMP_FILE);
+                    if (File.Exists(TEMP_OUTPUT_FILE))
+                        File.Delete(TEMP_OUTPUT_FILE);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"清理临时文件时出现错误: {ex.Message}");
+                }
             }
 
             return success;
         }
 
-        private OutputProcess BuildProcess(string pythonExePath, string args)
+        private OutputProcess BuildProcess(string exePath, string args)
         {
             var decompileProcess = new OutputProcess();
-            decompileProcess.StartInfo.FileName = pythonExePath;
+            decompileProcess.StartInfo.FileName = exePath;
             decompileProcess.StartInfo.Arguments = args;
             decompileProcess.StartInfo.UseShellExecute = false;
             decompileProcess.StartInfo.CreateNoWindow = true;

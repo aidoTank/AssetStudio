@@ -120,7 +120,7 @@ By default, the feature to decompile Lua bytecode is not enabled. It can be acti
 * [Unity-Technologies/crunch](https://github.com/Unity-Technologies/crunch/tree/unity)
 
 ### Lua Bytecode Decompiler
-* LuaJIT: [zhangjiequan/ljd: LuaJIT raw-bytecode decompiler](https://github.com/zhangjiequan/ljd)
+* LuaJIT: [luajit-decompiler-v2](hhttps://github.com/marsinator358/luajit-decompiler-v2)
 * Lua 5.1, 5.2, and 5.3: [zhangjiequan/luadec: Lua Decompiler for lua 5.1 , 5.2 and 5.3](https://github.com/zhangjiequan/luadec)
 
 ## Roadmap

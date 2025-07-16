@@ -120,7 +120,7 @@ Use **File-Extract file** or **File-Extract folder**。
 * [Unity-Technologies/crunch](https://github.com/Unity-Technologies/crunch/tree/unity)
 
 ### Lua字节码反编译器
-* LuaJIT: [zhangjiequan/ljd: LuaJIT raw-bytecode decompiler](https://github.com/zhangjiequan/ljd)
+* LuaJIT: [luajit-decompiler-v2](hhttps://github.com/marsinator358/luajit-decompiler-v2)
 * Lua 5.1, 5.2, and 5.3: [zhangjiequan/luadec: Lua Decompiler for lua 5.1 , 5.2 and 5.3](https://github.com/zhangjiequan/luadec)
 
 ## 线路图
