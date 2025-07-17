@@ -751,43 +751,6 @@ namespace AssetStudio
                 m_ParameterBlobIndices = reader.ReadUInt32ArrayArray();
             }
 
-            if ((version[0] > 2021) ||
-                (version[0] == 2021 && version[1] > 1) ||
-                (version[0] == 2021 && version[1] == 1 && version[2] >= 13))
-            {
-                int numSubProgramTiers = reader.ReadInt32();
-                m_PlayerSubPrograms = new SerializedPlayerSubProgram[numSubProgramTiers][];
-                for (int i = 0; i < numSubProgramTiers; i++)
-                {
-                    int numTierSubPrograms = reader.ReadInt32();
-                    m_PlayerSubPrograms[i] = new SerializedPlayerSubProgram[numTierSubPrograms];
-                    for (int j = 0; j < numTierSubPrograms; j++)
-                    {
-                        m_PlayerSubPrograms[i][j] = new SerializedPlayerSubProgram(reader);
-                    }
-
-                    reader.AlignStream();
-                }
-
-                reader.AlignStream();
-
-                int numParameterBlobIndexTiers = reader.ReadInt32();
-                m_ParameterBlobIndices = new uint[numParameterBlobIndexTiers][];
-                for (int i = 0; i < numParameterBlobIndexTiers; i++)
-                {
-                    int numParameterBlobIndices = reader.ReadInt32();
-                    m_ParameterBlobIndices[i] = new uint[numParameterBlobIndices];
-                    for (int j = 0; j < numParameterBlobIndices; j++)
-                    {
-                        m_ParameterBlobIndices[i][j] = reader.ReadUInt32();
-                    }
-
-                    reader.AlignStream();
-                }
-
-                reader.AlignStream();
-            }
-
             if ((version[0] == 2020 && version[1] > 3) ||
                (version[0] == 2020 && version[1] == 3 && version[2] >= 2) || //2020.3.2f1 and up
                (version[0] > 2021) ||
@@ -1092,15 +1055,9 @@ namespace AssetStudio
                     ) 
                 {
                     var stageCounts = reader.ReadUInt32Array();
+					reader.AlignStream();
                 }
 
-                if (version[0] >= 2021
-                    || (version[0] == 2021 && (version[1] > 3 || (version[1] == 3 || version[2] >= 21))))
-                {
-                    stageCounts = reader.ReadUInt32Array();
-
-                    reader.AlignStream();
-                }
 
                 var m_DependenciesCount = reader.ReadInt32();
                 for (int i = 0; i < m_DependenciesCount; i++)
