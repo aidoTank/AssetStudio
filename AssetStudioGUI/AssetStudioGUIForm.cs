@@ -831,10 +831,45 @@ namespace AssetStudioGUI
             }
             else
             {
-                StatusStripUpdate("Unsupported image for preview");
+                varTexInfo(assetItem, m_Texture2D);
             }
         }
+        private void varTexInfo(AssetItem assetItem, Texture2D m_Texture2D)
+        {
+            // 检查是否为流式纹理且资源文件缺失
+            if (m_Texture2D.image_data.Size == 0 && !string.IsNullOrEmpty(m_Texture2D.m_StreamData?.path))
+            {
+                var missingFile = Path.GetFileName(m_Texture2D.m_StreamData.path);
+                StatusStripUpdate($"无法预览流式纹理 '{m_Texture2D.m_Name}' - 缺少外部资源文件 '{missingFile}'");
 
+                // 设置详细的信息文本
+                assetItem.InfoText = $"纹理名称: {m_Texture2D.m_Name}\n" +
+                                    $"尺寸: {m_Texture2D.m_Width}x{m_Texture2D.m_Height}\n" +
+                                    $"格式: {m_Texture2D.m_TextureFormat}\n" +
+                                    $"类型: 流式纹理 (Streaming Texture)\n" +
+                                    $"状态: 外部资源文件缺失\n" +
+                                    $"需要文件: {missingFile}\n" +
+                                    "解决方案: 请将 .resS 文件放在与 bundle 文件相同的目录中";
+            }
+            else if (m_Texture2D.m_Width <= 0 || m_Texture2D.m_Height <= 0)
+            {
+                StatusStripUpdate($"纹理 '{m_Texture2D.m_Name}' 尺寸无效 ({m_Texture2D.m_Width}x{m_Texture2D.m_Height}) - 可能是 Unity 6000 兼容性问题");
+
+                assetItem.InfoText = $"纹理名称: {m_Texture2D.m_Name}\n" +
+                                    $"错误: 尺寸数据无效 ({m_Texture2D.m_Width}x{m_Texture2D.m_Height})\n" +
+                                    $"可能原因: Unity 6000 版本的数据结构变化\n" +
+                                    "建议: 使用 010 Editor + UnityStrip.bt 模板分析文件结构";
+            }
+            else
+            {
+                StatusStripUpdate("不支持预览此图像格式");
+
+                assetItem.InfoText = $"纹理名称: {m_Texture2D.m_Name}\n" +
+                                    $"尺寸: {m_Texture2D.m_Width}x{m_Texture2D.m_Height}\n" +
+                                    $"格式: {m_Texture2D.m_TextureFormat}\n" +
+                                    "状态: 不支持的格式或解码失败";
+            }
+        }
         private void PreviewAudioClip(AssetItem assetItem, AudioClip m_AudioClip)
         {
             //Info

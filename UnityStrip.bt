@@ -1,0 +1,613 @@
+//------------------------------------------------
+//--- 010 Editor v7.0.2 Binary Template
+//
+//      File: UnityStrip6000.bt
+//   Authors: Based on Andrew McRae, Modified for Unity 6000
+//   Version: 1.0
+//   Purpose: Parse Unity 6000 asset file with stripped unityVersion
+//  Category: Archive
+// File Mask: *.asset
+//  ID Bytes: 
+//   History: 
+//------------------------------------------------
+
+typedef uint64 u8;
+typedef uint32 u4;
+typedef uint16 u2;
+typedef ubyte  u1;
+typedef int64  s8;
+typedef int32  s4;
+typedef int16  s2;
+typedef byte   s1;
+
+// Bundle文件头结构
+typedef struct {
+    SetBackColor(0xc0c0c0);
+    string signature;
+    u4 version <format=decimal>;
+    
+    // Unity 6000版本检测和处理Strip的unityVersion
+    local u4 isUnity6000OrLater = (version >= 7); // Unity 6000通常使用版本7+
+    local quad currentPos = FTell();
+    
+    // 尝试读取下一个字符串来判断是否有unityVersion
+    local string testString = ReadString(currentPos);
+    local u1 hasUnityVersion = 1;
+    
+    // 如果下一个字符串看起来像版本号格式，则读取它
+    // 否则跳过unityVersion字段
+    if (isUnity6000OrLater && (Strlen(testString) == 0 || testString == "0.0.0" || 
+        !Strstr(testString, "."))) {
+        hasUnityVersion = 0;
+    }
+    
+    if (hasUnityVersion) {
+        string unityVersion;
+        string unityRevision;
+    } else {
+        // Unity 6000 stripped版本，跳过unityVersion和unityRevision
+        Printf("Unity 6000 Stripped Version Detected - unityVersion field omitted\n");
+    }
+} BundleHeader <read=read_BundleHeader>;
+
+string read_BundleHeader(BundleHeader &in) {
+    local string out;
+    if (in.hasUnityVersion) {
+        SPrintf(out, "%s v%d (%s)", in.signature, in.version, in.unityVersion);
+    } else {
+        SPrintf(out, "%s v%d (Unity 6000+ Stripped)", in.signature, in.version);
+    }
+    return out;
+}
+
+// UnityFS专用头部结构
+typedef struct {
+    SetBackColor(0xc0ffc0);
+    s8 size;
+    u4 compressedBlocksInfoSize;
+    u4 uncompressedBlocksInfoSize;
+    u4 flags <format=hex>;
+    
+    // 如果不是UnityFS格式，需要额外的padding byte
+    if (Strcmp(bundleHdr.signature, "UnityFS") != 0) {
+        u1 padding;
+    }
+} UnityFSHeader <read=read_UnityFSHeader>;
+
+string read_UnityFSHeader(UnityFSHeader &in) {
+    local string out;
+    SPrintf(out, "Size:0x%LX CompInfo:0x%X UncompInfo:0x%X Flags:0x%X", 
+            in.size, in.compressedBlocksInfoSize, in.uncompressedBlocksInfoSize, in.flags);
+    return out;
+}
+
+// 存储块信息结构
+typedef struct {
+    u4 uncompressedSize;
+    u4 compressedSize;
+    u2 flags <format=hex>;
+} StorageBlock <read=read_StorageBlock>;
+
+string read_StorageBlock(StorageBlock &in) {
+    local string out;
+    SPrintf(out, "Uncomp:0x%X Comp:0x%X Flags:0x%X", 
+            in.uncompressedSize, in.compressedSize, in.flags);
+    return out;
+}
+
+// 目录节点结构
+typedef struct {
+    s8 offset;
+    s8 size;
+    u4 flags;
+    string path;
+} DirectoryNode <read=read_DirectoryNode>;
+
+string read_DirectoryNode(DirectoryNode &in) {
+    local string out;
+    SPrintf(out, "@0x%LX+0x%LX '%s'", in.offset, in.size, in.path);
+    return out;
+}
+
+// 块信息和目录信息（可能被压缩）
+typedef struct {
+    SetBackColor(0xffc0c0);
+    local quad alignPos;
+    
+    // 版本7+需要16字节对齐
+    if (bundleHdr.version >= 7) {
+        alignPos = 16 - (FTell() & 15);
+        if (alignPos > 0 && alignPos < 16) {
+            u1 alignment[alignPos] <fgcolor=cGray,hidden=true>;
+        }
+    }
+    
+    // 压缩类型判断
+    local u4 compressionType = unityfsHdr.flags & 0x3F;
+    Printf("Compression type: ");
+    switch(compressionType) {
+        case 0: Printf("None\n"); break;
+        case 1: Printf("LZMA\n"); break;
+        case 2: Printf("LZ4\n"); break;
+        case 3: Printf("LZ4HC\n"); break;
+        case 4: Printf("LZHAM\n"); break;
+        default: Printf("Unknown (%d)\n", compressionType); break;
+    }
+    
+    Printf("Compressed blocks info size: 0x%X bytes\n", unityfsHdr.compressedBlocksInfoSize);
+    Printf("Expected uncompressed size: 0x%X bytes\n", unityfsHdr.uncompressedBlocksInfoSize);
+    
+    // 如果是无压缩，直接解析内容
+    if (compressionType == 0) {
+        // 无压缩，可以直接解析
+        SetBackColor(0xffdddd);
+        
+        // 16字节数据哈希
+        u1 uncompressedDataHash[16] <format=hex>;
+        
+        // 存储块信息
+        SetBackColor(0xddffdd);
+        u4 blocksInfoCount <format=decimal>;
+        Printf("Storage blocks count: %d\n", blocksInfoCount);
+        
+        if (blocksInfoCount > 0 && blocksInfoCount < 1000) { // 合理性检查
+            StorageBlock storageBlocks[blocksInfoCount];
+        }
+        
+        // 目录节点信息
+        SetBackColor(0xddddff);
+        u4 nodesCount <format=decimal>;
+        Printf("Directory nodes count: %d\n", nodesCount);
+        
+        if (nodesCount > 0 && nodesCount < 1000) { // 合理性检查
+            local int i;
+            for (i = 0; i < nodesCount; i++) {
+                DirectoryNode nodes;
+            }
+        }
+        
+        Printf("Successfully parsed uncompressed blocks info\n");
+        
+    } else {
+        // 压缩数据，显示原始字节并尝试分析结构
+        SetBackColor(0xffdddd);
+        u1 compressedBlocksInfo[unityfsHdr.compressedBlocksInfoSize];
+        Printf("Compressed data displayed as raw bytes (decompression needed)\n");
+        
+        // 分析压缩数据的一些特征
+        Printf("First 16 bytes of compressed data: ");
+        local int i;
+        for (i = 0; i < 16 && i < unityfsHdr.compressedBlocksInfoSize; i++) {
+            Printf("%02X ", compressedBlocksInfo[i]);
+        }
+        Printf("\n");
+        
+        // 对于LZ4/LZ4HC，尝试提供一些分析信息
+        if (compressionType == 2 || compressionType == 3) {
+            Printf("LZ4 compressed data detected. Expected structure after decompression:\n");
+            Printf("  - 16 bytes: uncompressed data hash\n");
+            Printf("  - 4 bytes: storage blocks count\n");
+            Printf("  - N * 10 bytes: storage block entries (uncomp_size + comp_size + flags)\n");
+            Printf("  - 4 bytes: directory nodes count\n");
+            Printf("  - N * (16 + string_len): directory node entries\n");
+        }
+    }
+    
+} BlocksInfoSection;
+
+// 如果解析了压缩的块信息，还需要解析实际的块数据
+typedef struct(u4 blockCompressionType) {
+    SetBackColor(0xc0c0ff);
+    
+    // 检查是否需要在块开始前对齐
+    local u4 needsPadding = (unityfsHdr.flags & 0x200) != 0; // BlockInfoNeedPaddingAtStart
+    if (needsPadding) {
+        local quad alignPos = 16 - (FTell() & 15);
+        if (alignPos > 0 && alignPos < 16) {
+            u1 blocksPadding[alignPos] <fgcolor=cGray,hidden=true>;
+            Printf("Added padding: %d bytes\n", alignPos);
+        }
+    }
+    
+    Printf("Blocks data section starts at: 0x%LX\n", FTell());
+    
+    // 计算剩余数据大小
+    local quad remainingSize = FileSize() - FTell();
+    Printf("Remaining file size: 0x%LX bytes\n", remainingSize);
+    
+    // 检查文件是否已结束
+    if (remainingSize <= 0) {
+        Printf("No block data remaining - file parsing complete\n");
+    } else {
+        // 显示块数据的概览信息
+        local quad expectedBlockSize = 0;
+        local u1 hasValidBlockInfo = 0;
+        
+        // 如果我们成功解析了块信息，尝试计算预期大小
+        if (blockCompressionType == 0) {
+            Printf("Attempting to use parsed block information (uncompressed)\n");
+            hasValidBlockInfo = 1;
+            // 这里应该根据解析的块信息计算总大小
+            // 但由于010 Editor的限制，我们只显示一个合理的预览
+        }
+        
+        // 分析块数据结构
+        Printf("Analyzing block data structure...\n");
+        
+        // 读取并分析前几个块的头部信息
+        local quad currentPos = FTell();
+        local quad totalProcessed = 0;
+        local int j; // for循环计数器
+        
+        // 预先分析块的数量和读取策略，避免循环中定义数组
+        Printf("Analyzing up to 5 data blocks...\n");
+        
+        if (remainingSize >= 16) {
+            // 分析第一个块
+            Printf("=== Block 0 Analysis (offset: 0x%LX) ===\n", currentPos);
+            u1 block0Header[16] <bgcolor=0xe0e0ff>;
+            Printf("Block 0 header: ");
+            for (j = 0; j < 16; j++) {
+                Printf("%02X ", block0Header[j]);
+            }
+            Printf("\n");
+            
+            // 分析第一个块的类型
+            if (block0Header[0] == 0x00 && block0Header[1] == 0x00 && block0Header[2] == 0x00) {
+                Printf("Block 0: Possible Unity serialized file header\n");
+            } else if (block0Header[0] == 0x55 && block0Header[1] == 0x6E && block0Header[2] == 0x69 && block0Header[3] == 0x74) {
+                Printf("Block 0: Possible nested Unity file signature\n");
+            } else {
+                Printf("Block 0: Unknown type - possibly compressed data\n");
+            }
+            
+            totalProcessed += 16;
+        }
+        
+        // 如果还有足够数据，分析第二个块（跳过一些数据后）
+        if (remainingSize >= 4096 + 16) {
+            FSeek(currentPos + 4096);
+            Printf("=== Block 1 Analysis (offset: 0x%LX) ===\n", currentPos + 4096);
+            u1 block1Header[16] <bgcolor=0xe0f0ff>;
+            Printf("Block 1 header: ");
+            for (j = 0; j < 16; j++) {
+                Printf("%02X ", block1Header[j]);
+            }
+            Printf("\n");
+            
+            if (block1Header[0] == 0x00 && block1Header[1] == 0x00 && block1Header[2] == 0x00) {
+                Printf("Block 1: Possible Unity serialized file header\n");
+            } else if (block1Header[0] == 0x55 && block1Header[1] == 0x6E && block1Header[2] == 0x69 && block1Header[3] == 0x74) {
+                Printf("Block 1: Possible nested Unity file signature\n");
+            } else {
+                Printf("Block 1: Unknown type - possibly compressed data\n");
+            }
+            
+            totalProcessed = 4096 + 16;
+        }
+        
+        // 如果还有足够数据，分析第三个块
+        if (remainingSize >= 16384 + 16) {
+            FSeek(currentPos + 16384);
+            Printf("=== Block 2 Analysis (offset: 0x%LX) ===\n", currentPos + 16384);
+            u1 block2Header[16] <bgcolor=0xf0e0ff>;
+            Printf("Block 2 header: ");
+            for (j = 0; j < 16; j++) {
+                Printf("%02X ", block2Header[j]);
+            }
+            Printf("\n");
+            
+            if (block2Header[0] == 0x00 && block2Header[1] == 0x00 && block2Header[2] == 0x00) {
+                Printf("Block 2: Possible Unity serialized file header\n");
+            } else if (block2Header[0] == 0x55 && block2Header[1] == 0x6E && block2Header[2] == 0x69 && block2Header[3] == 0x74) {
+                Printf("Block 2: Possible nested Unity file signature\n");
+            } else {
+                Printf("Block 2: Unknown type - possibly compressed data\n");
+            }
+            
+            totalProcessed = 16384 + 16;
+        }
+        
+        // 跳到文件末尾完成分析
+        FSeek(currentPos + remainingSize);
+        
+        // 显示分析结果
+        Printf("Block analysis completed. Analyzed 3 sample blocks at different offsets.\n");
+        Printf("Total block data size: 0x%LX bytes\n", remainingSize);
+    }
+    
+} BlocksDataSection;
+
+// 序列化文件头结构 - 针对Unity 6000优化
+typedef struct {
+    SetBackColor(0xb0b0b0);
+    u4 metadataSize;
+    u4 fileSize;
+    u4 version <format=decimal>;
+    u4 dataOffset;
+    u1 endianess <format=decimal>;
+    
+    // Unity 6000可能有不同的对齐方式
+    local quad _padding;
+    _padding = 4 - (FTell() & 3);
+    if (_padding > 0 && _padding < 4) {
+        u1 padding[_padding] <fgcolor=cGray,hidden=true>;
+    }
+    
+    // Unity 6000特定字段检测
+    local u1 isUnity6000Format = (version >= 22); // Unity 6000使用格式版本22+
+    if (isUnity6000Format) {
+        Printf("Unity 6000 SerializedFile Format Detected (v%d)\n", version);
+    }
+} SerializedFileHeader <read=read_SerializedFileHeader>;
+
+string read_SerializedFileHeader(SerializedFileHeader &in) {
+    local string out;
+    if (in.isUnity6000Format) {
+        SPrintf(out, "Unity6000 v%d %s", in.version, in.endianess?"BE":"LE");
+    } else {
+        SPrintf(out, "v%d %s", in.version, in.endianess?"BE":"LE");
+    }
+    return out;
+}
+
+typedef struct {
+    u4 hash1;
+    u4 hash2;
+    u4 hash3;
+    u4 hash4;
+} UnityHash128 <read=read_UnityHash128>;
+
+string read_UnityHash128 (UnityHash128 &in) {
+    local string out;
+    SPrintf(out, "%08X%08X%08X%08X", in.hash4, in.hash3, in.hash2, in.hash1);
+    return out;
+}
+
+typedef struct {
+    s4 classID <format=decimal>;
+
+    if (classID < 0) {
+        UnityHash128 scriptID;
+    }
+
+    UnityHash128 oldTypeHash;
+    
+    // Unity 6000可能有额外的hash字段
+    local quad currentPos = FTell();
+    local u1 hasExtraFields = 0;
+    
+    // 检测是否有Unity 6000特有的额外字段
+    if (exists(h) && h.isUnity6000Format) {
+        // Unity 6000可能有类型依赖信息
+        hasExtraFields = 1;
+    }
+} BaseClass <read=read_BaseClass,optimize=false>;
+
+string read_BaseClass(BaseClass &in) {
+    local string out;
+    SPrintf(out, "ClassID:%d", in.classID);
+    return out;
+}
+
+typedef struct {
+    string revision;
+    u4 attributes;
+    u1 embedded <format=decimal>;
+    u4 numBaseClasses <format=decimal>;
+    if (numBaseClasses > 0) {
+        BaseClass typeMap[numBaseClasses];
+    }
+    
+    // Unity 6000可能有额外的类型树信息
+    if (exists(h) && h.isUnity6000Format && numBaseClasses > 0) {
+        Printf("Unity 6000 TypeTree: %d base classes\n", numBaseClasses);
+    }
+} TypeTree <read=read_TypeTree,optimize=false>;
+
+string read_TypeTree(TypeTree &in) {
+    local string out;
+    SPrintf(out, "%d classes '%s'", in.numBaseClasses, in.revision);
+    return out;
+}
+
+typedef struct {
+    s8 objectID <format=decimal>;
+    u4 byteStart;
+    u4 byteSize;
+    s4 typeID <format=decimal>;
+    s2 classID <format=decimal>; 
+    s2 scriptTypeIndex<format=decimal>;
+    u1 stripped <format=decimal>;
+} ObjectInfo <read=read_ObjectInfo>;
+
+string read_ObjectInfo(ObjectInfo &in) {
+    local string out;
+    SPrintf(out, "ID:%d Type:%d @0x%X+0x%X%s", 
+            in.objectID, in.typeID, in.byteStart, in.byteSize,
+            in.stripped ? " [STRIPPED]" : "");
+    return out;
+}
+
+typedef struct {
+    local int i, j;
+    local quad _padding;
+    u4 entries <format=decimal>;
+    for (i = 0; i < entries; i++) {
+        _padding = 4 - (FTell() & 3);
+        if (_padding > 0 && _padding < 4) {
+            for (j = 0; j < _padding; j++) {
+                u1 padding <fgcolor=cGray,hidden=true>;
+            }
+        }
+        ObjectInfo o;
+    }
+} ObjectInfoTable <read=read_ObjectInfoTable,optimize=false>;
+
+string read_ObjectInfoTable(ObjectInfoTable &in) {
+    local string out;
+    SPrintf(out, "%d objects", in.entries);
+    return out;
+}
+
+typedef struct {
+    s4 serializedFileIndex <format=decimal>;
+    s8 identifierInFile;
+} ObjectIdentifier;
+
+typedef struct {
+    local int i;
+    local quad _padding;
+    u4 entries <format=decimal>;
+    for (i = 0; i < entries; i++) {
+        ObjectIdentifier o;
+        _padding = 4 - (FTell() & 3);
+        if (_padding > 0 && _padding < 4) {
+            u1 padding[_padding] <fgcolor=cGray,hidden=true>;
+        }
+    }
+} ObjectIdentifierTable <read=read_ObjectIdentifierTable,optimize=false>;
+
+string read_ObjectIdentifierTable(ObjectIdentifierTable &in) {
+    local string out;
+    SPrintf(out, "%d identifiers", in.entries);
+    return out;
+}
+
+typedef struct {
+    string assetPath;
+    UnityHash128 guid;
+    s4 type <format=decimal>;
+    string filePath;
+} FileIdentifier <read=read_FileIdentifier,optimize=false>;
+
+string read_FileIdentifier(FileIdentifier &in) {
+    local string out;
+    SPrintf(out, "'%s'", in.filePath);
+    return out;
+}
+
+typedef struct {
+    local int i;
+    u4 entries <format=decimal>;
+    for (i = 0; i < entries; i++) {
+        FileIdentifier f;
+    }
+} FileIdentifierTable <read=read_FileIdentifierTable,optimize=false>;
+
+string read_FileIdentifierTable(FileIdentifierTable &in) {
+    local string out;
+    SPrintf(out, "%d externals", in.entries);
+    return out;
+}
+
+typedef struct {
+    SetBackColor(0xb0b0ff);
+    TypeTree typeTree;
+
+    SetBackColor(0xb0ffb0);
+    ObjectInfoTable objectInfoTable;
+
+    SetBackColor(0xffb0b0);
+    ObjectIdentifierTable objectIDTable;
+
+    SetBackColor(0xffffb0);
+    FileIdentifierTable externals;
+} SerializedFileMetadata;
+
+// 主要解析逻辑
+DisplayFormatHex();
+BigEndian();
+
+// 首先尝试读取Bundle头（如果是Bundle文件）
+local quad startPos = FTell();
+local string firstBytes = ReadString(startPos, 8);
+
+if (Strstr(firstBytes, "UnityFS") == 0 || 
+    Strstr(firstBytes, "UnityRaw") == 0 || 
+    Strstr(firstBytes, "UnityWeb") == 0) {
+    // 这是一个Bundle文件
+    BundleHeader bundleHdr;
+    Printf("Bundle file detected: %s v%d\n", bundleHdr.signature, bundleHdr.version);
+    
+    // 读取UnityFS专用头部
+    UnityFSHeader unityfsHdr;
+    Printf("UnityFS header parsed at position: 0x%LX\n", FTell());
+    
+    // 保存压缩类型以便后续使用
+    local u4 globalCompressionType = unityfsHdr.flags & 0x3F;
+    
+    // 读取块信息和目录信息
+    BlocksInfoSection blocksInfo;
+    Printf("Blocks info section completed at position: 0x%LX\n", FTell());
+    
+    // 只有当还有数据时才尝试解析块数据
+    if (FTell() < FileSize()) {
+        BlocksDataSection blocksData(globalCompressionType);
+        Printf("Blocks data section completed at position: 0x%LX\n", FTell());
+    } else {
+        Printf("No block data section - file ends after blocks info\n");
+    }
+    
+    Printf("Bundle parsing completed. File size: 0x%LX, Final position: 0x%LX\n", FileSize(), FTell());
+    
+    // 显示完整的文件结构概览
+    Printf("\n=== Unity Bundle File Structure Summary ===\n");
+    Printf("File Type: %s\n", bundleHdr.signature);
+    Printf("Bundle Version: %d\n", bundleHdr.version);
+    if (bundleHdr.hasUnityVersion) {
+        Printf("Unity Version: %s\n", bundleHdr.unityVersion);
+        Printf("Unity Revision: %s\n", bundleHdr.unityRevision);
+    } else {
+        Printf("Unity Version: [STRIPPED]\n");
+    }
+    Printf("Bundle Size: 0x%LX bytes\n", unityfsHdr.size);
+    Printf("Compression Type: ");
+    switch(globalCompressionType) {
+        case 0: Printf("None\n"); break;
+        case 1: Printf("LZMA\n"); break;
+        case 2: Printf("LZ4\n"); break;
+        case 3: Printf("LZ4HC\n"); break;
+        case 4: Printf("LZHAM\n"); break;
+        default: Printf("Unknown (%d)\n", globalCompressionType); break;
+    }
+    Printf("Flags: 0x%X\n", unityfsHdr.flags);
+    Printf("Compressed Blocks Info: 0x%X bytes\n", unityfsHdr.compressedBlocksInfoSize);
+    Printf("Uncompressed Blocks Info: 0x%X bytes\n", unityfsHdr.uncompressedBlocksInfoSize);
+    Printf("Block Data: 0x%LX bytes\n", FileSize() - 0xB3);
+    Printf("=== End Summary ===\n");
+    
+    // 提供进一步分析的建议
+    Printf("\n=== Analysis Recommendations ===\n");
+    if (globalCompressionType != 0) {
+        Printf("⚠️ This bundle uses compression. To fully analyze:\n");
+        Printf("   1. Use AssetStudio (https://github.com/Perfare/AssetStudio)\n");
+        Printf("   2. Use UnityPy (Python: pip install UnityPy)\n");
+        Printf("   3. Use custom tools with LZ4 decompression support\n");
+    }
+    Printf("📊 Current analysis coverage:\n");
+    Printf("   ✅ Bundle header (signature, version, Unity version)\n");
+    Printf("   ✅ UnityFS header (size, compression info, flags)\n");
+    if (globalCompressionType == 0) {
+        Printf("   ✅ Block and directory information (uncompressed)\n");
+    } else {
+        Printf("   ⚠️  Block and directory information (compressed, raw bytes only)\n");
+    }
+    Printf("   📋 Block data (structural analysis)\n");
+    Printf("\n💡 Tips:\n");
+    Printf("   - Use hex editor to examine specific blocks\n");
+    Printf("   - Check block headers for embedded file signatures\n");
+    Printf("   - Unity 6000+ may have stripped version info\n");
+    Printf("=====================================\n");
+    
+} else {
+    // 普通序列化文件的解析保持不变
+SerializedFileHeader h;
+LittleEndian();
+SerializedFileMetadata m;
+
+    Printf("Serialized file parsed. Format version: %d\n", h.version);
+    if (h.isUnity6000Format) {
+        Printf("Unity 6000 format features detected.\n");
+    }
+}

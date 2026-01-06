@@ -10,6 +10,8 @@ using System.Windows.Forms;
 using System.Xml.Linq;
 using static AssetStudioGUI.Exporter;
 using Object = AssetStudio.Object;
+using System.Threading.Tasks;
+using System.Collections.Concurrent;
 
 namespace AssetStudioGUI
 {
@@ -338,127 +340,128 @@ namespace AssetStudioGUI
         public static Dictionary<string, SortedDictionary<int, TypeTreeItem>> BuildClassStructure()
         {
             var typeMap = new Dictionary<string, SortedDictionary<int, TypeTreeItem>>();
+            Progress.Reset();
+            int i = 0;
             foreach (var assetsFile in assetsManager.assetsFileList)
             {
-                if (typeMap.TryGetValue(assetsFile.unityVersion, out var curVer))
+                var version = $"{assetsFile.unityVersion} ({assetsFile.m_TargetPlatform})";
+                if (!typeMap.TryGetValue(version, out var curDic))
                 {
-                    foreach (var type in assetsFile.m_Types.Where(x => x.m_Type != null))
+                    curDic = new SortedDictionary<int, TypeTreeItem>();
+                    typeMap.Add(version, curDic);
+                }
+                foreach (var type in assetsFile.m_Types.Where(x => x.m_Type != null))
+                {
+                    var key = type.classID;
+                    if (type.m_ScriptTypeIndex >= 0)
                     {
-                        var key = type.classID;
-                        if (type.m_ScriptTypeIndex >= 0)
-                        {
-                            key = -1 - type.m_ScriptTypeIndex;
-                        }
-                        curVer[key] = new TypeTreeItem(key, type.m_Type);
+                        key = -1 - type.m_ScriptTypeIndex;
+                    }
+                    if (!curDic.ContainsKey(key))
+                    {
+                        curDic.Add(key, new TypeTreeItem(key, type.m_Type));
                     }
                 }
-                else
-                {
-                    var items = new SortedDictionary<int, TypeTreeItem>();
-                    foreach (var type in assetsFile.m_Types.Where(x => x.m_Type != null))
-                    {
-                        var key = type.classID;
-                        if (type.m_ScriptTypeIndex >= 0)
-                        {
-                            key = -1 - type.m_ScriptTypeIndex;
-                        }
-                        items[key] = new TypeTreeItem(key, type.m_Type);
-                    }
-                    typeMap.Add(assetsFile.unityVersion, items);
-                }
+                Progress.Report(++i, assetsManager.assetsFileList.Count);
             }
-
             return typeMap;
         }
-
-        public static void ExportAssets(string savePath, List<AssetItem> toExportAssets, ExportType exportType)
+        public static async void ExportAssets(string savePath, List<AssetItem> toExportAssets, ExportType exportType)
         {
-            ThreadPool.QueueUserWorkItem(state =>
+            await Task.Run(() =>
             {
-                Thread.CurrentThread.CurrentCulture = new CultureInfo("en-US");
-
-                int toExportCount = toExportAssets.Count;
-                int exportedCount = 0;
                 int i = 0;
+                int cancel = 0;
+                int total = toExportAssets.Count;
                 Progress.Reset();
-                foreach (var asset in toExportAssets)
+                var cancellationTokenSource = new CancellationTokenSource();
+                var parallelOptions = new ParallelOptions()
                 {
-                    string exportPath;
-                    switch (Properties.Settings.Default.assetGroupOption)
+                    CancellationToken = cancellationTokenSource.Token
+                };
+
+                try
+                {
+                    Parallel.ForEach(toExportAssets, parallelOptions, asset =>
                     {
-                        case 0: //type name
-                            exportPath = Path.Combine(savePath, asset.TypeString);
-                            break;
-                        case 1: //container path
-                            if (!string.IsNullOrEmpty(asset.Container))
-                            {
-                                exportPath = Path.Combine(savePath, Path.GetDirectoryName(asset.Container));
-                            }
-                            else
-                            {
-                                exportPath = savePath;
-                            }
-                            break;
-                        case 2: //source file
-                            if (string.IsNullOrEmpty(asset.SourceFile.originalPath))
-                            {
-                                exportPath = Path.Combine(savePath, asset.SourceFile.fileName + "_export");
-                            }
-                            else
-                            {
-                                exportPath = Path.Combine(savePath, Path.GetFileName(asset.SourceFile.originalPath) + "_export", asset.SourceFile.fileName);
-                            }
-                            break;
-                        default:
-                            exportPath = savePath;
-                            break;
-                    }
-                    exportPath += Path.DirectorySeparatorChar;
-                    StatusStripUpdate($"[{exportedCount}/{toExportCount}] Exporting {asset.TypeString}: {asset.Text}");
-                    try
-                    {
+                        string exportPath;
+                        switch (asset.Type)
+                        {
+                            case ClassIDType.Texture2D:
+                            case ClassIDType.Sprite:
+                                exportPath = Path.Combine(savePath, "Texture2D");
+                                break;
+                            case ClassIDType.Shader:
+                                exportPath = Path.Combine(savePath, "Shader");
+                                break;
+                            case ClassIDType.AudioClip:
+                                exportPath = Path.Combine(savePath, "AudioClip");
+                                break;
+                            case ClassIDType.Font:
+                                exportPath = Path.Combine(savePath, "Font");
+                                break;
+                            case ClassIDType.Mesh:
+                                exportPath = Path.Combine(savePath, "Mesh");
+                                break;
+                            case ClassIDType.TextAsset:
+                                exportPath = Path.Combine(savePath, "TextAsset");
+                                break;
+                            case ClassIDType.MonoBehaviour:
+                                exportPath = Path.Combine(savePath, "MonoBehaviour");
+                                break;
+                            case ClassIDType.MovieTexture:
+                                exportPath = Path.Combine(savePath, "MovieTexture");
+                                break;
+                            case ClassIDType.VideoClip:
+                                exportPath = Path.Combine(savePath, "VideoClip");
+                                break;
+                            case ClassIDType.Animator:
+                                exportPath = Path.Combine(savePath, "Animator");
+                                break;
+                            default:
+                                exportPath = Path.Combine(savePath, "etc");
+                                break;
+                        }
+                        bool success = false;
                         switch (exportType)
                         {
                             case ExportType.Raw:
-                                if (ExportRawFile(asset, exportPath))
-                                {
-                                    exportedCount++;
-                                }
+                                success = ExportRawFile(asset, exportPath);
                                 break;
                             case ExportType.Dump:
-                                if (ExportDumpFile(asset, exportPath))
-                                {
-                                    exportedCount++;
-                                }
+                                success = ExportDumpFile(asset, exportPath);
                                 break;
                             case ExportType.Convert:
-                                if (ExportConvertFile(asset, exportPath))
-                                {
-                                    exportedCount++;
-                                }
+                                success = ExportConvertFile(asset, exportPath);
                                 break;
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"Export {asset.Type}:{asset.Text} error\r\n{ex.Message}\r\n{ex.StackTrace}");
-                    }
-
-                    Progress.Report(++i, toExportCount);
+                        if (success)
+                        {
+                            StatusStripUpdate($"[{Interlocked.Increment(ref i)}/{total}] Exported {asset.TypeString}: {asset.Text}");
+                        }
+                        else
+                        {
+                            StatusStripUpdate($"[{Interlocked.Increment(ref i)}/{total}] Dll not found for {asset.TypeString}: {asset.Text}");
+                        }
+                    });
+                }
+                catch (OperationCanceledException)
+                {
+                    cancel = 1;
+                }
+                finally
+                {
+                    cancellationTokenSource.Dispose();
                 }
 
-                var statusText = exportedCount == 0 ? "Nothing exported." : $"Finished exporting {exportedCount} assets.";
-
-                if (toExportCount > exportedCount)
+                if (cancel == 0)
                 {
-                    statusText += $" {toExportCount - exportedCount} assets skipped (not extractable or files already exist)";
-                }
-
-                StatusStripUpdate(statusText);
-
-                if (Properties.Settings.Default.openAfterExport && exportedCount > 0)
-                {
+                    StatusStripUpdate($"Finished exporting {total} assets.");
                     OpenFolderInExplorer(savePath);
+                }
+                else
+                {
+                    StatusStripUpdate($"Export cancelled, {i} assets exported.");
                 }
             });
         }

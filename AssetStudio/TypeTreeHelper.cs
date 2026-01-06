@@ -89,8 +89,11 @@ namespace AssetStudio
                     break;
                 case "map":
                     {
-                        if ((m_Nodes[i + 1].m_MetaFlag & 0x4000) != 0)
+                        if ((m_Nodes[i + 1].m_MetaFlag & 0x4000) != 0 || (m_Nodes[0].m_MetaFlag & 0x8000) != 0)
+                        {
+                            reader.AlignStream();
                             align = true;
+                        }
                         append = false;
                         sb.AppendFormat("{0}{1} {2}\r\n", (new string('\t', level)), varTypeStr, varNameStr);
                         sb.AppendFormat("{0}{1} {2}\r\n", (new string('\t', level + 1)), "Array", "Array");
@@ -126,8 +129,11 @@ namespace AssetStudio
                     {
                         if (i < m_Nodes.Count - 1 && m_Nodes[i + 1].m_Type == "Array") //Array
                         {
-                            if ((m_Nodes[i + 1].m_MetaFlag & 0x4000) != 0)
+                            if ((m_Nodes[i + 1].m_MetaFlag & 0x4000) != 0 || (m_Nodes[0].m_MetaFlag & 0x8000) != 0)
+                            {
+                                reader.AlignStream();
                                 align = true;
+                            }
                             append = false;
                             sb.AppendFormat("{0}{1} {2}\r\n", (new string('\t', level)), varTypeStr, varNameStr);
                             sb.AppendFormat("{0}{1} {2}\r\n", (new string('\t', level + 1)), "Array", "Array");
@@ -241,8 +247,11 @@ namespace AssetStudio
                     break;
                 case "map":
                     {
-                        if ((m_Nodes[i + 1].m_MetaFlag & 0x4000) != 0)
+                        if ((m_Nodes[i + 1].m_MetaFlag & 0x4000) != 0 || (m_Nodes[0].m_MetaFlag & 0x8000) != 0)
+                        {
+                            reader.AlignStream();
                             align = true;
+                        }
                         var map = GetNodes(m_Nodes, i);
                         i += map.Count - 1;
                         var first = GetNodes(map, 4);
@@ -270,8 +279,11 @@ namespace AssetStudio
                     {
                         if (i < m_Nodes.Count - 1 && m_Nodes[i + 1].m_Type == "Array") //Array
                         {
-                            if ((m_Nodes[i + 1].m_MetaFlag & 0x4000) != 0)
+                            if ((m_Nodes[i + 1].m_MetaFlag & 0x4000) != 0 || (m_Nodes[0].m_MetaFlag & 0x8000) != 0)
+                            {
+                                reader.AlignStream();
                                 align = true;
+                            }
                             var vector = GetNodes(m_Nodes, i);
                             i += vector.Count - 1;
                             var size = reader.ReadInt32();

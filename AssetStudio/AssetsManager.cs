@@ -10,7 +10,7 @@ namespace AssetStudio
 {
     public class AssetsManager
     {
-        public string SpecifyUnityVersion;
+        public string SpecifyUnityVersion = "Unity6000.0.51f1";
         public List<SerializedFile> assetsFileList = new List<SerializedFile>();
 
         internal Dictionary<string, int> assetsFileIndexCache = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
